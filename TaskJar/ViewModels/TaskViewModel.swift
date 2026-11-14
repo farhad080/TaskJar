@@ -13,6 +13,9 @@ final class TaskViewModel {
     /// Set when a Firestore operation fails; the view presents it as an alert.
     var errorMessage: String?
 
+    /// Tasks still in the jar.
+    var incompleteTasks: [TodoTask] { tasks.filter { !$0.isCompleted } }
+
     @ObservationIgnored private let db = Firestore.firestore()
     @ObservationIgnored private var listener: ListenerRegistration?
     @ObservationIgnored private var uid: String?
@@ -106,11 +109,20 @@ final class TaskViewModel {
     }
 
     func toggleComplete(_ task: TodoTask) {
+        setCompleted(task, to: !task.isCompleted)
+    }
+
+    /// Marks a task done (idempotent, unlike `toggleComplete`).
+    func markComplete(_ task: TodoTask) {
+        setCompleted(task, to: true)
+    }
+
+    private func setCompleted(_ task: TodoTask, to isCompleted: Bool) {
         guard let id = task.id else { return }
         guard let tasksCollection else { return reportNotSignedIn() }
 
         tasksCollection.document(id).updateData(
-            ["isCompleted": !task.isCompleted],
+            ["isCompleted": isCompleted],
             completion: handleWriteResult
         )
     }

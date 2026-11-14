@@ -39,7 +39,15 @@ A SwiftUI to-do app backed by Firebase (Auth + Firestore).
   - Live updates through a snapshot listener, newest first (sorted by `createdAt`)
   - Add, update, toggle complete and delete
   - The listener is removed on sign out, and the local task list is cleared
-- **Task list screen**
+- **Two tabs** once signed in: **Jar** (the home screen) and **All Tasks**
+- **Jar (home screen)**
+  - A large animated jar holds one paper slip per incomplete task
+  - Tap the jar: it shakes, then shows one random incomplete task on a card
+    (it avoids drawing the same task twice in a row)
+  - **Done** marks the task complete; **Put back** closes the card and leaves the task in the jar
+  - Friendly messages when the jar is empty (no tasks yet, or everything is done), with an **Add Task** button
+  - Haptics when drawing and when completing a task
+- **All Tasks screen**
   - Each row shows the task's title, description and done state
   - Tap the circle to mark a task done; tap the rest of the row to edit it; swipe left to delete
   - **+** opens the add/edit sheet; the title is required, the description is optional,
@@ -71,9 +79,14 @@ TaskJar/
 │   ├── AuthViewModel.swift     # signUp / signIn / signOut + auth state listener
 │   └── TaskViewModel.swift     # Firestore CRUD + real-time listener for users/{uid}/tasks
 └── Views/
-    ├── RootView.swift          # Login when signed out, TaskListView when signed in
-    ├── TaskListView.swift      # Main screen: task rows, tap to edit, swipe to delete, +, sign out
+    ├── RootView.swift          # Login when signed out, MainTabView when signed in
+    ├── MainTabView.swift       # Jar + All Tasks tabs; shows Firestore error alerts
+    ├── TaskListView.swift      # All Tasks: task rows, tap to edit, swipe to delete, +, sign out
     ├── AddEditTaskView.swift   # Sheet for creating or editing a task (title required)
+    ├── Jar/
+    │   ├── JarView.swift       # Home screen: draw a random incomplete task
+    │   ├── JarGraphic.swift    # Jar drawn as a SwiftUI shape, filled with task slips
+    │   └── DrawnTaskCard.swift # Card with Done / Put back
     └── Auth/
         ├── LoginView.swift
         ├── SignUpView.swift

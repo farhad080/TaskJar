@@ -44,17 +44,6 @@ struct TaskListView: View {
                     }
                 }
                 .authErrorAlert(auth)
-                .alert(
-                    "Something went wrong",
-                    isPresented: Binding(
-                        get: { taskViewModel.errorMessage != nil },
-                        set: { if !$0 { taskViewModel.errorMessage = nil } }
-                    )
-                ) {
-                    Button("OK", role: .cancel) {}
-                } message: {
-                    Text(taskViewModel.errorMessage ?? "")
-                }
         }
     }
 

@@ -8,7 +8,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if auth.isSignedIn {
-                TaskListView()
+                MainTabView()
                     .transition(.opacity)
             } else {
                 NavigationStack {

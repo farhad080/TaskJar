@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TaskListView: View {
+    @Environment(AuthViewModel.self) private var auth
     @State private var viewModel = TaskListViewModel()
 
     var body: some View {
@@ -27,10 +28,26 @@ struct TaskListView: View {
                 }
             }
             .navigationTitle("TaskJar")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if let email = auth.user?.email {
+                            Text(email)
+                        }
+                        Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                            auth.signOut()
+                        }
+                    } label: {
+                        Image(systemName: "person.crop.circle")
+                    }
+                }
+            }
+            .authErrorAlert(auth)
         }
     }
 }
 
 #Preview {
     TaskListView()
+        .environment(AuthViewModel())
 }

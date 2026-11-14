@@ -10,7 +10,7 @@ struct TaskJarApp: App {
 
     var body: some Scene {
         WindowGroup {
-            TaskListView()
+            RootView()
         }
     }
 }

@@ -4,19 +4,20 @@ import SwiftUI
 struct MainTabView: View {
     @Environment(TaskViewModel.self) private var taskViewModel
 
-    private enum Tab: Hashable { case jar, allTasks }
+    /// Named `AppTab` rather than `Tab` to avoid clashing with SwiftUI's own `Tab` type (iOS 18 SDK).
+    private enum AppTab: Hashable { case jar, allTasks }
 
-    @State private var selection: Tab = .jar
+    @State private var selection: AppTab = .jar
 
     var body: some View {
         TabView(selection: $selection) {
             JarView()
                 .tabItem { Label("Jar", systemImage: "sparkles") }
-                .tag(Tab.jar)
+                .tag(AppTab.jar)
 
             TaskListView()
                 .tabItem { Label("All Tasks", systemImage: "checklist") }
-                .tag(Tab.allTasks)
+                .tag(AppTab.allTasks)
         }
         // Lives above the tabs so Firestore errors show whichever tab is open.
         .alert(

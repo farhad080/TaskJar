@@ -85,7 +85,7 @@ final class TaskViewModel {
                     }
                     guard let snapshot else { return }
 
-                    self.tasks = snapshot.documents.compactMap { document in
+                    self.tasks = snapshot.documents.compactMap { (document) -> TodoTask? in
                         do {
                             return try document.data(as: TodoTask.self)
                         } catch {

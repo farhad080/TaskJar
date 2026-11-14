@@ -5,7 +5,7 @@ a random one for you to do next.
 
 ## Requirements
 
-- Xcode 16 or later
+- Xcode 16.2 or later (required by Firebase iOS SDK 12)
 - iOS 17.0 or later
 - A Firebase project (the free Spark plan is enough)
 - Firebase iOS SDK 12.x. It is already added to the project via Swift Package Manager

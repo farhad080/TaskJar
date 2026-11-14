@@ -38,8 +38,14 @@ A SwiftUI to-do app backed by Firebase (Auth + Firestore).
 - **Tasks in Cloud Firestore**, private to each user
   - Live updates through a snapshot listener, newest first (sorted by `createdAt`)
   - Add, update, toggle complete and delete
-  - Tap the circle to mark a task complete; swipe left to delete
   - The listener is removed on sign out, and the local task list is cleared
+- **Task list screen**
+  - Each row shows the task's title, description and done state
+  - Tap the circle to mark a task done; tap the rest of the row to edit it; swipe left to delete
+  - **+** opens the add/edit sheet; the title is required, the description is optional,
+    and editing also offers a Completed toggle
+  - An empty state with an **Add Task** button when there are no tasks
+  - A **Sign Out** button in the navigation bar
 
 ## Data model
 
@@ -66,7 +72,8 @@ TaskJar/
 │   └── TaskViewModel.swift     # Firestore CRUD + real-time listener for users/{uid}/tasks
 └── Views/
     ├── RootView.swift          # Login when signed out, TaskListView when signed in
-    ├── TaskListView.swift      # Main screen: live task list, toggle, swipe-to-delete, sign out
+    ├── TaskListView.swift      # Main screen: task rows, tap to edit, swipe to delete, +, sign out
+    ├── AddEditTaskView.swift   # Sheet for creating or editing a task (title required)
     └── Auth/
         ├── LoginView.swift
         ├── SignUpView.swift

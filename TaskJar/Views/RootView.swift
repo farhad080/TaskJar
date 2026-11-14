@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Switches between the auth flow and the main app based on Firebase auth state.
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var auth = AuthViewModel()
     @State private var taskViewModel = TaskViewModel()
 
@@ -27,6 +28,13 @@ struct RootView: View {
                 taskViewModel.stopListening()
             }
         }
+        // Reconnect a listener that an error ended while the app was in the background.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { taskViewModel.retryIfNeeded() }
+        }
+        // One alert for auth errors across Login, Sign Up and Sign Out. Attaching it in each
+        // screen made SwiftUI try to present the same alert twice while SignUpView was pushed.
+        .authErrorAlert(auth)
         .environment(auth)
         .environment(taskViewModel)
     }

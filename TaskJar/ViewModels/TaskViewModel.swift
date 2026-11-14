@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import FirebaseFirestore
 
 /// Reads and writes the signed-in user's tasks at `users/{uid}/tasks`.
@@ -16,44 +17,41 @@ final class TaskViewModel {
     /// Tasks still in the jar.
     var incompleteTasks: [TodoTask] { tasks.filter { !$0.isCompleted } }
 
-    @ObservationIgnored private let db = Firestore.firestore()
-    @ObservationIgnored private var listener: ListenerRegistration?
+    // `nonisolated(unsafe)` so `deinit` (which is nonisolated) can remove the listener.
+    @ObservationIgnored nonisolated(unsafe) private var listener: ListenerRegistration?
     @ObservationIgnored private var uid: String?
+
+    private static let logger = Logger(subsystem: "com.taskjar.TaskJar", category: "Tasks")
+
+    /// Resolved on use rather than at init, so creating the view model
+    /// (e.g. in SwiftUI previews) doesn't require a configured FirebaseApp.
+    private var db: Firestore { Firestore.firestore() }
 
     private var tasksCollection: CollectionReference? {
         guard let uid else { return nil }
         return db.collection("users").document(uid).collection("tasks")
     }
 
+    deinit {
+        listener?.remove()
+    }
+
     // MARK: - Listening
 
-    /// Starts the real-time listener for `uid`. Safe to call repeatedly; it's a no-op for the same user.
+    /// Starts the real-time listener for `uid`. No-op if it's already running for that user.
     func startListening(uid: String) {
         guard uid != self.uid || listener == nil else { return }
         stopListening()
 
         self.uid = uid
         isLoading = true
+        attachListener(uid: uid)
+    }
 
-        listener = db.collection("users").document(uid).collection("tasks")
-            .order(by: "createdAt", descending: true)
-            .addSnapshotListener { [weak self] snapshot, error in
-                // Firestore delivers snapshot callbacks on the main queue.
-                MainActor.assumeIsolated {
-                    guard let self, self.uid == uid else { return }
-                    self.isLoading = false
-
-                    if let error {
-                        self.errorMessage = error.localizedDescription
-                        return
-                    }
-                    guard let snapshot else { return }
-
-                    self.tasks = snapshot.documents.compactMap { document in
-                        try? document.data(as: TodoTask.self)
-                    }
-                }
-            }
+    /// Re-attaches the listener if it was terminated by an error (e.g. network or permissions).
+    func retryIfNeeded() {
+        guard let uid, listener == nil else { return }
+        attachListener(uid: uid)
     }
 
     /// Removes the listener and clears local data. Call before/when the user signs out.
@@ -66,46 +64,70 @@ final class TaskViewModel {
         errorMessage = nil
     }
 
+    private func attachListener(uid: String) {
+        listener = db.collection("users").document(uid).collection("tasks")
+            .order(by: "createdAt", descending: true)
+            .addSnapshotListener { [weak self] snapshot, error in
+                // Firestore delivers snapshot callbacks on the main queue.
+                MainActor.assumeIsolated {
+                    // Ignore late callbacks for a user who has since signed out.
+                    guard let self, self.uid == uid else { return }
+                    self.isLoading = false
+
+                    if let error {
+                        // Firestore ends a listener after an error. Drop the dead registration
+                        // so `retryIfNeeded()` can attach a fresh one.
+                        self.listener?.remove()
+                        self.listener = nil
+                        Self.logger.error("Tasks listener failed: \(error.localizedDescription)")
+                        self.errorMessage = Self.message(for: error)
+                        return
+                    }
+                    guard let snapshot else { return }
+
+                    self.tasks = snapshot.documents.compactMap { document in
+                        do {
+                            return try document.data(as: TodoTask.self)
+                        } catch {
+                            Self.logger.error("Skipping malformed task \(document.documentID): \(error.localizedDescription)")
+                            return nil
+                        }
+                    }
+                }
+            }
+    }
+
     // MARK: - CRUD
 
     func addTask(title: String, description: String = "") {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else {
-            errorMessage = "Task title can't be empty."
-            return
-        }
         guard let tasksCollection else { return reportNotSignedIn() }
+        guard let fields = validated(title: title, description: description) else { return }
 
-        let task = TodoTask(
-            title: trimmedTitle,
-            description: description.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
+        let task = TodoTask(title: fields.title, description: fields.description)
         do {
             // Fire-and-forget: the snapshot listener shows the task immediately (latency
             // compensation), and the completion only reports a server-side failure.
             _ = try tasksCollection.addDocument(from: task, completion: handleWriteResult)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.message(for: error)
         }
     }
 
     func updateTask(_ task: TodoTask) {
         guard let id = task.id else { return }
         guard let tasksCollection else { return reportNotSignedIn() }
+        guard let fields = validated(title: task.title, description: task.description) else { return }
 
-        var updated = task
-        updated.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.description = task.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !updated.title.isEmpty else {
-            errorMessage = "Task title can't be empty."
-            return
-        }
-
-        do {
-            try tasksCollection.document(id).setData(from: updated, merge: true, completion: handleWriteResult)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        // `updateData` (not `setData(merge:)`) so editing a task that was deleted meanwhile
+        // fails with "not found" instead of silently re-creating it. `createdAt` is left as is.
+        tasksCollection.document(id).updateData(
+            [
+                "title": fields.title,
+                "description": fields.description,
+                "isCompleted": task.isCompleted
+            ],
+            completion: handleWriteResult
+        )
     }
 
     func toggleComplete(_ task: TodoTask) {
@@ -136,18 +158,62 @@ final class TaskViewModel {
 
     // MARK: - Helpers
 
+    /// Trims and checks fields against the same limits the security rules enforce.
+    private func validated(title: String, description: String) -> (title: String, description: String)? {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = description.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if title.isEmpty {
+            errorMessage = "Task title can't be empty."
+            return nil
+        }
+        if title.count > TodoTask.maxTitleLength {
+            errorMessage = "Title can be at most \(TodoTask.maxTitleLength) characters."
+            return nil
+        }
+        if description.count > TodoTask.maxDescriptionLength {
+            errorMessage = "Description can be at most \(TodoTask.maxDescriptionLength) characters."
+            return nil
+        }
+        return (title, description)
+    }
+
     /// Completion for Firestore writes: surfaces a failure as an alert.
     private var handleWriteResult: (Error?) -> Void {
         { [weak self] error in
             guard let error else { return }
             // Firestore write completions are delivered on the main queue.
             MainActor.assumeIsolated {
-                self?.errorMessage = error.localizedDescription
+                Self.logger.error("Task write failed: \(error.localizedDescription)")
+                self?.errorMessage = Self.message(for: error)
             }
         }
     }
 
     private func reportNotSignedIn() {
         errorMessage = "You need to be signed in to change tasks."
+    }
+
+    private static func message(for error: Error) -> String {
+        let nsError = error as NSError
+        guard nsError.domain == FirestoreErrorDomain,
+              let code = FirestoreErrorCode.Code(rawValue: nsError.code) else {
+            return error.localizedDescription
+        }
+
+        switch code {
+        case .permissionDenied, .unauthenticated:
+            return "You don't have access to these tasks. Try signing out and back in."
+        case .notFound:
+            return "That task no longer exists."
+        case .unavailable, .deadlineExceeded:
+            return "Can't reach the server. Your changes will sync when you're back online."
+        case .resourceExhausted:
+            return "Too many requests right now. Please try again shortly."
+        case .invalidArgument, .failedPrecondition:
+            return "That change couldn't be saved. Please check the task and try again."
+        default:
+            return error.localizedDescription
+        }
     }
 }

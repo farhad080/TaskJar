@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import FirebaseAuth
+import FirebaseCore
 
 @MainActor
 @Observable
@@ -14,10 +15,14 @@ final class AuthViewModel {
 
     var isSignedIn: Bool { user != nil }
 
+    // `nonisolated(unsafe)` so `deinit` (which is nonisolated) can remove the listener.
     @ObservationIgnored
-    private var authStateHandle: AuthStateDidChangeListenerHandle?
+    nonisolated(unsafe) private var authStateHandle: AuthStateDidChangeListenerHandle?
 
     init() {
+        // Without a configured FirebaseApp (e.g. SwiftUI previews) Auth.auth() would crash.
+        guard FirebaseApp.app() != nil else { return }
+
         user = Auth.auth().currentUser
         authStateHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             // Firebase delivers auth state callbacks on the main thread.

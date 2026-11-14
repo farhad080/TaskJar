@@ -43,7 +43,6 @@ struct TaskListView: View {
                         AddEditTaskView(task: task)
                     }
                 }
-                .authErrorAlert(auth)
         }
     }
 
@@ -73,6 +72,8 @@ struct TaskListView: View {
                     }
                 }
             }
+            // The snapshot listener keeps data live; this only reconnects it after an error.
+            .refreshable { taskViewModel.retryIfNeeded() }
         }
     }
 

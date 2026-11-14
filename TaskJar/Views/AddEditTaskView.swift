@@ -26,7 +26,15 @@ struct AddEditTaskView: View {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var isValid: Bool { !trimmedTitle.isEmpty }
+    private var titleTooLong: Bool { trimmedTitle.count > TodoTask.maxTitleLength }
+
+    private var descriptionTooLong: Bool {
+        description.trimmingCharacters(in: .whitespacesAndNewlines).count > TodoTask.maxDescriptionLength
+    }
+
+    private var isValid: Bool {
+        !trimmedTitle.isEmpty && !titleTooLong && !descriptionTooLong
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,14 +47,24 @@ struct AddEditTaskView: View {
                 } header: {
                     Text("Title")
                 } footer: {
-                    if hasEditedTitle && !isValid {
+                    if hasEditedTitle && trimmedTitle.isEmpty {
                         Text("Title is required.").foregroundStyle(.red)
+                    } else if titleTooLong {
+                        Text("Title can be at most \(TodoTask.maxTitleLength) characters.")
+                            .foregroundStyle(.red)
                     }
                 }
 
-                Section("Description") {
+                Section {
                     TextField("Optional details", text: $description, axis: .vertical)
                         .lineLimit(3...8)
+                } header: {
+                    Text("Description")
+                } footer: {
+                    if descriptionTooLong {
+                        Text("Description can be at most \(TodoTask.maxDescriptionLength) characters.")
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 if isEditing {

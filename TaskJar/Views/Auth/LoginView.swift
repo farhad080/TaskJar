@@ -80,7 +80,6 @@ struct LoginView: View {
             }
         }
         .navigationTitle("Sign In")
-        .authErrorAlert(auth)
     }
 
     private func submit() {

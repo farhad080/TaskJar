@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each user can only read and write the tasks under their own uid.
+    match /users/{uid}/tasks/{taskId} {
+
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      // Shape of a task document. Limits mirror TodoTask.maxTitleLength /
+      // TodoTask.maxDescriptionLength in the app.
+      function isValidTask(task) {
+        return task.keys().hasOnly(['title', 'description', 'isCompleted', 'createdAt'])
+          && task.keys().hasAll(['title', 'isCompleted', 'createdAt'])
+          && task.title is string
+          && task.title.size() > 0
+          && task.title.size() <= 200
+          && (!('description' in task) || (task.description is string && task.description.size() <= 2000))
+          && task.isCompleted is bool
+          && task.createdAt is timestamp;
+      }
+
+      allow read: if isOwner();
+
+      allow create: if isOwner() && isValidTask(request.resource.data);
+
+      // createdAt is fixed once the task exists (the list is sorted by it).
+      allow update: if isOwner()
+        && isValidTask(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if isOwner();
+    }
+
+    // Everything else is denied by default.
+  }
+}

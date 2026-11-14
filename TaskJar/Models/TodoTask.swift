@@ -10,6 +10,10 @@ struct TodoTask: Identifiable, Codable, Equatable {
     /// Stored in Firestore as a Timestamp.
     var createdAt: Date
 
+    /// Field limits, mirrored in `firestore.rules`.
+    static let maxTitleLength = 200
+    static let maxDescriptionLength = 2000
+
     init(
         id: String? = nil,
         title: String,
@@ -22,5 +26,20 @@ struct TodoTask: Identifiable, Codable, Equatable {
         self.description = description
         self.isCompleted = isCompleted
         self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, description, isCompleted, createdAt
+    }
+
+    /// Lenient decoding: optional fields fall back to defaults, so a document that is missing
+    /// one (e.g. created by hand in the Firebase console) still shows up instead of being dropped.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        _id = try container.decode(DocumentID<String>.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
 }

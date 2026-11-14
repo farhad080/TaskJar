@@ -89,7 +89,6 @@ struct SignUpView: View {
         }
         .navigationTitle("Sign Up")
         .navigationBarBackButtonHidden(auth.isLoading)
-        .authErrorAlert(auth)
     }
 
     private func submit() {

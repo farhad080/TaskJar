@@ -1,0 +1,14 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Firebase config (contains project-specific keys; keep out of public repos)
+GoogleService-Info.plist
